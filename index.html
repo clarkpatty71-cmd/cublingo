@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CFOP Trainer Pro</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-color: #f8fafc;
+      --accent-color: #3b82f6;
+      --accent-hover: #2563eb;
+      --border-color: #334155;
+      
+      /* 3D Cube Color Scheme */
+      --cube-U: #ffffff; /* Up */
+      --cube-D: #ffd700; /* Down */
+      --cube-F: #0000ff; /* Front */
+      --cube-B: #008000; /* Back */
+      --cube-L: #ffa500; /* Left */
+      --cube-R: #ff0000; /* Right */
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg-color); color: var(--text-color); display: flex; height: 100vh; overflow: hidden; }
+
+    /* Sidebar Navigation */
+    #sidebar { width: 260px; background: var(--card-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 20px; gap: 15px; }
+    .brand { font-size: 1.2rem; font-weight: 800; letter-spacing: 1px; color: var(--accent-color); margin-bottom: 10px; }
+    .nav-group { display: flex; flex-direction: column; gap: 5px; }
+    .nav-label { font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-top: 10px; }
+    button, select { background: var(--border-color); color: var(--text-color); border: none; padding: 10px 14px; border-radius: 6px; cursor: pointer; text-align: left; font-size: 0.9rem; transition: background 0.2s; }
+    button:hover, select:hover { background: var(--accent-color); }
+
+    /* Main Area */
+    #main { flex: 1; display: flex; flex-direction: column; padding: 30px; gap: 20px; overflow-y: auto; }
+    .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; }
+
+    /* Display Area */
+    #scramble-display { font-size: 1.4rem; font-family: monospace; text-align: center; color: #38bdf8; min-height: 50px; display: flex; align-items: center; justify-content: center; }
+    #timer-display { font-size: 5rem; font-weight: 900; font-family: monospace; text-align: center; margin: 20px 0; }
+    
+    /* Stats Layout */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center; }
+    .stat-box { background: var(--bg-color); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); }
+    .stat-label { font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px; }
+    .stat-value { font-size: 1.4rem; font-weight: bold; }
+
+    /* Modal / Customization Panel */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 100; }
+    .modal-content { background: var(--card-bg); padding: 25px; border-radius: 8px; width: 400px; max-width: 90%; display: flex; flex-direction: column; gap: 15px; }
+    .color-picker-row { display: flex; justify-content: space-between; align-items: center; }
+    input[type="color"] { border: none; background: none; cursor: pointer; width: 30px; height: 30px; }
+
+    /* Input mode controls */
+    .manual-entry { display: flex; gap: 10px; margin-top: 10px; }
+    .manual-entry input { flex: 1; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <div id="sidebar">
+    <div class="brand">CFOP TRAINER</div>
+    
+    <div class="nav-label">Set Selection</div>
+    <select id="set-select" onchange="changeSet(this.value)">
+      <option value="F2L">F2L (First 2 Layers)</option>
+      <option value="OLL">OLL</option>
+      <option value="PLL">PLL</option>
+      <option value="WV">Winter Variation (WV)</option>
+      <option value="SV">Summer Variation (SV)</option>
+      <option value="COLL">COLL</option>
+      <option value="VLS">VLS</option>
+      <option value="ELL">ELL</option>
+      <option value="OLLCP">OLLCP</option>
+      <option value="CLS">CLS</option>
+      <option value="AntiPLL">Anti-PLL</option>
+      <option value="1LLL">1LLL</option>
+      <option value="Pseudo">Pseudo-F2L</option>
+    </select>
+
+    <div class="nav-label">Input Source</div>
+    <select id="input-mode" onchange="changeInputMode(this.value)">
+      <option value="spacebar">Spacebar Timer</option>
+      <option value="smartcube">Smart Cube (Bluetooth)</option>
+      <option value="gantimer">GAN Smart Timer</option>
+      <option value="manual">Manual Entry</option>
+    </select>
+
+    <button onclick="connectBluetooth()" id="bt-btn">Connect Bluetooth Device</button>
+
+    <div class="nav-label">Settings</div>
+    <button onclick="toggleModal(true)">Customize Colors</button>
+  </div>
+
+  <!-- Main Application Workspace -->
+  <div id="main">
+    <div class="card" id="scramble-display">Loading cases...</div>
+
+    <div class="card">
+      <div id="timer-display">0.000</div>
+      
+      <div class="manual-entry" id="manual-input-container" style="display:none;">
+        <input type="number" step="0.001" id="manual-time" placeholder="Time in seconds (e.g. 12.34)">
+        <input type="number" id="manual-moves" placeholder="Move count">
+        <button onclick="submitManualTime()">Submit</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-label">Time</div><div class="stat-value" id="stat-time">0.00s</div></div>
+        <div class="stat-box"><div class="stat-label">Move Count</div><div class="stat-value" id="stat-moves">0</div></div>
+        <div class="stat-box"><div class="stat-label">TPS</div><div class="stat-value" id="stat-tps">0.00</div></div>
+        <div class="stat-box"><div class="stat-label">Active Case</div><div class="stat-value" id="stat-case">None</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Color Customization Modal -->
+  <div class="modal" id="color-modal">
+    <div class="modal-content">
+      <h3>Theme & Cube Color Settings</h3>
+      <div class="color-picker-row"><span>Background</span><input type="color" id="picker-bg" value="#0f172a" onchange="updateTheme()"></div>
+      <div class="color-picker-row"><span>Card Background</span><input type="color" id="picker-card" value="#1e293b" onchange="updateTheme()"></div>
+      <div class="color-picker-row"><span>Accent Color</span><input type="color" id="picker-accent" value="#3b82f6" onchange="updateTheme()"></div>
+      <hr style="border-color: var(--border-color)">
+      <div class="color-picker-row"><span>Up Face (U)</span><input type="color" id="picker-U" value="#ffffff" onchange="updateTheme()"></div>
+      <div class="color-picker-row"><span>Down Face (D)</span><input type="color" id="picker-D" value="#ffd700" onchange="updateTheme()"></div>
+      <div class="color-picker-row"><span>Front Face (F)</span><input type="color" id="picker-F" value="#0000ff" onchange="updateTheme()"></div>
+      <div class="color-picker-row"><span>Back Face (B)</span><input type="color" id="picker-B" value="#008000" onchange="updateTheme()"></div>
+      <div class="color-picker-row"><span>Left Face (L)</span><input type="color" id="picker-L" value="#ffa500" onchange="updateTheme()"></div>
+      <div class="color-picker-row"><span>Right Face (R)</span><input type="color" id="picker-R" value="#ff0000" onchange="updateTheme()"></div>
+      <button onclick="toggleModal(false)">Save & Close</button>
+    </div>
+  </div>
+
+  <script>
+    // System State Variables
+    let currentSet = "F2L";
+    let currentCase = null;
+    let inputMode = "spacebar";
+    
+    // Timer State
+    let timerState = "stopped"; // stopped, holding, running
+    let timerStartTime = 0;
+    let timerInterval = null;
+
+    // Smart Tracker State
+    let moveCount = 0;
+    let bluetoothDevice = null;
+
+    // Database Mock (In Real deployment, fetch directly from cuberoot.me JSON endpoints)
+    const caseDatabase = {
+      "F2L": [
+        { id: "F2L 1", scramble: "U R U' R'", alg: "R U R'" },
+        { id: "F2L 2", scramble: "F' U' F", alg: "F' U F" }
+      ],
+      "OLL": [
+        { id: "OLL 1", scramble: "R U2 R2 F R F' U2 R' F R F'", alg: "R U2 R2 F R F' U2 R' F R F'" },
+        { id: "OLL 20", scramble: "r U R' U' M U R U' r'", alg: "r U R' U' M U R U' r'" }
+      ],
+      "PLL": [
+        { id: "Aa-Perm", scramble: "x R' D R' U2 R D' R' U2 R2 x'", alg: "x R2 D2 R U R' D2 R U' R x'" },
+        { id: "T-Perm", scramble: "R U R' U' R' F R2 U' R' U' R U R' F'", alg: "R U R' U' R' F R2 U' R' U' R U R' F'" }
+      ],
+      "WV": [{ id: "WV 1", scramble: "L' U2 R U' R' U2 L", alg: "L' U2 R U' R' U2 L" }],
+      "SV": [{ id: "SV 1", scramble: "R U2 R' U' R U' R'", alg: "R U R' U R U2 R'" }],
+      "COLL": [{ id: "COLL H1", scramble: "F R U R' U' R U R' U' R U R' F'", alg: "F R U R' U' R U R' U' R U R' F'" }],
+      "VLS": [{ id: "VLS 1", scramble: "U2 R U2 R'", alg: "R U2 R'" }],
+      "ELL": [{ id: "ELL 1", scramble: "M2 U M2 U2 M2 U M2", alg: "M2 U M2 U2 M2 U M2" }],
+      "OLLCP": [{ id: "OLLCP 1", scramble: "R' U' R U' R' U2 R", alg: "R' U' R U' R' U2 R" }],
+      "CLS": [{ id: "CLS 1", scramble: "R U R' U' R U R'", alg: "R U' R' U R U' R'" }],
+      "AntiPLL": [{ id: "Anti-PLL 1", scramble: "R U R' F' R U R' U' R' F R2 U' R'", alg: "R U R' U' R' F R2 U' R' U' R U R' F'" }],
+      "1LLL": [{ id: "1LLL 1", scramble: "R U2 R' U' R U R' U' R U' R'", alg: "R U R' U R U2 R'" }],
+      "Pseudo": [{ id: "Pseudo-F2L 1", scramble: "D R U R' D'", alg: "D R U' R' D'" }]
+    };
+
+    // App Initialization
+    window.onload = () => {
+      loadNewCase();
+      setupSpacebarTimer();
+    };
+
+    function changeSet(setName) {
+      currentSet = setName;
+      loadNewCase();
+    }
+
+    function loadNewCase() {
+      const setCases = caseDatabase[currentSet] || [{ id: "Generic", scramble: "R U R' U'", alg: "R U R'" }];
+      currentCase = setCases[Math.floor(Math.random() * setCases.length)];
+      document.getElementById('scramble-display').innerText = currentCase.scramble;
+      document.getElementById('stat-case').innerText = currentCase.id;
+    }
+
+    function changeInputMode(mode) {
+      inputMode = mode;
+      document.getElementById('manual-input-container').style.display = mode === 'manual' ? 'flex' : 'none';
+    }
+
+    // Spacebar Timer Logic
+    function setupSpacebarTimer() {
+      window.addEventListener('keydown', (e) => {
+        if (e.code !== 'Space' || inputMode !== 'spacebar' || e.repeat) return;
+        if (timerState === 'stopped') {
+          timerState = 'holding';
+          document.getElementById('timer-display').style.color = '#eab308';
+        } else if (timerState === 'running') {
+          stopTimer();
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.code !== 'Space' || inputMode !== 'spacebar') return;
+        if (timerState === 'holding') {
+          startTimer();
+        }
+      });
+    }
+
+    function startTimer() {
+      timerState = 'running';
+      document.getElementById('timer-display').style.color = '#22c55e';
+      timerStartTime = Date.now();
+      timerInterval = setInterval(() => {
+        const elapsed = (Date.now() - timerStartTime) / 1000;
+        document.getElementById('timer-display').innerText = elapsed.toFixed(3);
+      }, 10);
+    }
+
+    function stopTimer() {
+      timerState = 'stopped';
+      document.getElementById('timer-display').style.color = 'var(--text-color)';
+      clearInterval(timerInterval);
+      const finalTime = (Date.now() - timerStartTime) / 1000;
+      recordSolve(finalTime, moveCount || 10); // Default simulated move count if no smart cube
+    }
+
+    function submitManualTime() {
+      const t = parseFloat(document.getElementById('manual-time').value);
+      const m = parseInt(document.getElementById('manual-moves').value) || 0;
+      if (!isNaN(t) && t > 0) {
+        document.getElementById('timer-display').innerText = t.toFixed(3);
+        recordSolve(t, m);
+      }
+    }
+
+    function recordSolve(timeSec, moves) {
+      const tps = moves > 0 ? (moves / timeSec).toFixed(2) : "N/A";
+      document.getElementById('stat-time').innerText = timeSec.toFixed(2) + "s";
+      document.getElementById('stat-moves').innerText = moves;
+      document.getElementById('stat-tps').innerText = tps;
+      
+      // Load next case after solve finishes
+      setTimeout(loadNewCase, 1000);
+    }
+
+    // Bluetooth Integration Shell (Web Bluetooth API)
+    async function connectBluetooth() {
+      if (!navigator.bluetooth) {
+        alert("Web Bluetooth is not supported in this browser.");
+        return;
+      }
+      try {
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['0000fff0-0000-1000-8000-00805f9b34fb'] // Common Smart Cube Service UUID
+        });
+        document.getElementById('bt-btn').innerText = "Connected: " + bluetoothDevice.name;
+      } catch (err) {
+        console.error("Bluetooth connection failed", err);
+      }
+    }
+
+    // Modal & Color Scheme Functions
+    function toggleModal(show) {
+      document.getElementById('color-modal').style.display = show ? 'flex' : 'none';
+    }
+
+    function updateTheme() {
+      const root = document.documentElement;
+      root.style.setProperty('--bg-color', document.getElementById('picker-bg').value);
+      root.style.setProperty('--card-bg', document.getElementById('picker-card').value);
+      root.style.setProperty('--accent-color', document.getElementById('picker-accent').value);
+      root.style.setProperty('--cube-U', document.getElementById('picker-U').value);
+      root.style.setProperty('--cube-D', document.getElementById('picker-D').value);
+      root.style.setProperty('--cube-F', document.getElementById('picker-F').value);
+      root.style.setProperty('--cube-B', document.getElementById('picker-B').value);
+      root.style.setProperty('--cube-L', document.getElementById('picker-L').value);
+      root.style.setProperty('--cube-R', document.getElementById('picker-R').value);
+    }
+  </script>
+</body>
+</html>
